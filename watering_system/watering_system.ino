@@ -1,7 +1,18 @@
+#include <SPI.h>
+#include <SD.h>
+
 int relayPin = 6;
 int rainPin = A0;
-int trigPin = 12;
-int echoPin = 11;
+int trigPin = 2;
+int echoPin = 3;
+
+int misoPin = 12;
+int mosiPin = 11;
+int sckPin = 13;
+int csPin = 4;
+
+int timeout = 43200000; // milliseconds
+int wateringTime = 3;
 
 void setup(){
   // Register Pins
@@ -10,19 +21,29 @@ void setup(){
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
 
+  // init SD card module
+  if (!SD.begin(csPin)) {
+    return;
+  }
+
   Serial.begin(9600);  // debug
 }
 
 void loop() {
-  int timeout = 500; //  milliseconds
+  // delay 12 hours
+  unsigned long startMillis = millis();
+  while (millis() - startMillis < timeout);
   
-  delay(timeout); 
+  // write sensor data
+  String fileOutput = generateFileName();
+  int sensorValue = analogRead(rainPin);
+  bool flag = saveToFile(fileOutput, String(sensorValue));
 
-  if(isMoist() == false){
+  if(isMoist(sensorValue) == false){
     Serial.println("Ground is dry!"); // debug    
     if(checkWater() == true){
       Serial.println("Water full");
-      startWatering(3);
+      startWatering(wateringTime);
     }
     else{
       Serial.println("No water!"); // debug
@@ -48,11 +69,8 @@ void startWatering(int duration){
  *  and return True/False
  * YL-69 sensor 
  */
-bool isMoist(){
-  int thresholdValue = 800;
-  int sensorValue = analogRead(rainPin);
-
-  Serial.println(sensorValue);
+bool isMoist(int sensorValue){
+  int thresholdValue = 750;
   return sensorValue < thresholdValue;
 }
 
@@ -64,7 +82,7 @@ bool checkWater(){
   int borderValue = 2;  
   long echoTime, distance;
 
-  // HC -SR04 example
+  // HC-SR04 example
   digitalWrite(trigPin, LOW);
   delayMicroseconds(5);
 
@@ -80,4 +98,27 @@ bool checkWater(){
 
   // TODO Add check > 3000 It value then sensor too close
   return distance > borderValue;
+}
+
+String generateFileName(){
+  unsigned long day = 86400000;
+  unsigned long daysFromLaunch = millis() / day;
+  String a = String(daysFromLaunch);
+  String fileName = a + ".txt";
+
+  return fileName;
+}
+
+/* This function save string data to file on SD card
+ */
+bool saveToFile(String fn, String data){
+  File dataFile = SD.open(fn, FILE_WRITE);
+  if (dataFile) {
+    dataFile.println(data);
+    dataFile.close();
+    
+    return true;
+  }
+ 
+  return false;
 }
